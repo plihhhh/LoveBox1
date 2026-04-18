@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import mqtt from "mqtt";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, 
@@ -68,26 +69,40 @@ export default function UserDashboard() {
   const [brightness, setBrightness] = useState(50);
   const [loadingBrightness, setLoadingBrightness] = useState(false);
 
-  // Polling Status setiap 5 detik
+  // Real-time Status via MQTT WebSockets
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch("/api/status");
-        if (res.ok) {
-          const data = await res.json();
-          setStatus({
-            online: data.online ?? true, 
-            battery: data.battery ?? 85,
-          });
-        }
-      } catch (error) {
-        setStatus(prev => ({ ...prev, online: false }));
-      }
-    };
+    const client = mqtt.connect(process.env.NEXT_PUBLIC_MQTT_URL, {
+      username: process.env.NEXT_PUBLIC_MQTT_USERNAME,
+      password: process.env.NEXT_PUBLIC_MQTT_PASSWORD,
+    });
 
-    fetchStatus();
-    const intervalId = setInterval(fetchStatus, 5000);
-    return () => clearInterval(intervalId);
+    client.on("connect", () => {
+      console.log("WebSocket terhubung ke MQTT!");
+      client.subscribe("lovebox/status");
+    });
+
+    client.on("message", (topic, message) => {
+      if (topic === "lovebox/status") {
+        try {
+          const data = JSON.parse(message.toString());
+          setStatus(prev => ({
+            ...prev,
+            online: data.online ?? true, 
+            battery: data.battery ?? prev.battery
+          }));
+        } catch (error) {
+          console.error("Gagal parse MQTT status:", error);
+        }
+      }
+    });
+
+    client.on("close", () => setStatus(prev => ({ ...prev, online: false })));
+    client.on("offline", () => setStatus(prev => ({ ...prev, online: false })));
+
+    // Cleanup saat komponen unmount
+    return () => {
+      if (client) client.end();
+    };
   }, []);
 
   // Fetch Initial Data (Fotos dll)

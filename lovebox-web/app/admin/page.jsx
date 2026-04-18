@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import mqtt from "mqtt";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, 
@@ -14,7 +15,8 @@ import {
   Battery, 
   BatteryFull, 
   BatteryMedium, 
-  BatteryLow 
+  BatteryLow,
+  Wifi
 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
@@ -78,27 +80,44 @@ export default function AdminDashboard() {
   const [loadingOTA, setLoadingOTA] = useState(false);
   const [otaProgress, setOtaProgress] = useState(0);
 
-  // Polling Status setiap 5 detik
-  useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch("/api/status");
-        if (res.ok) {
-          const data = await res.json();
-          setStatus({
-            online: data.online ?? true, 
-            battery: data.battery ?? 85,
-            firmwareApp: data.firmwareApp ?? "1.0.0"
-          });
-        }
-      } catch (error) {
-        setStatus(prev => ({ ...prev, online: false }));
-      }
-    };
+  // State: Reset WiFi (Card F)
+  const [loadingWifiReset, setLoadingWifiReset] = useState(false);
 
-    fetchStatus();
-    const intervalId = setInterval(fetchStatus, 5000);
-    return () => clearInterval(intervalId);
+  // Real-time Status via MQTT WebSockets
+  useEffect(() => {
+    const client = mqtt.connect(process.env.NEXT_PUBLIC_MQTT_URL, {
+      username: process.env.NEXT_PUBLIC_MQTT_USERNAME,
+      password: process.env.NEXT_PUBLIC_MQTT_PASSWORD,
+    });
+
+    client.on("connect", () => {
+      console.log("WebSocket terhubung ke MQTT!");
+      client.subscribe("lovebox/status");
+    });
+
+    client.on("message", (topic, message) => {
+      if (topic === "lovebox/status") {
+        try {
+          const data = JSON.parse(message.toString());
+          setStatus(prev => ({
+            ...prev,
+            online: data.online ?? true, 
+            battery: data.battery ?? prev.battery,
+            firmwareApp: data.firmwareApp ?? prev.firmwareApp
+          }));
+        } catch (error) {
+          console.error("Gagal parse MQTT status:", error);
+        }
+      }
+    });
+
+    client.on("close", () => setStatus(prev => ({ ...prev, online: false })));
+    client.on("offline", () => setStatus(prev => ({ ...prev, online: false })));
+
+    // Cleanup saat komponen unmount
+    return () => {
+      if (client) client.end();
+    };
   }, []);
 
   // Fetch Initial Data (Fotos dll)
@@ -293,6 +312,37 @@ export default function AdminDashboard() {
       setOtaProgress(0);
       setFirmwareFile(null);
     }, 1500);
+  };
+
+  // Fungsi untuk handle Reset WiFi
+  const handleResetWifi = async () => {
+    // Cek status device online atau offline
+    if (!status.online) {
+      toast.error("Gagal mengirim perintah. Pastikan device online.");
+      return;
+    }
+
+    // Konfirmasi kepada user sebelum eksekusi
+    const isConfirmed = window.confirm("Yakin mau reset WiFi? Device akan meminta setup WiFi baru.");
+    if (!isConfirmed) return;
+
+    // Set loading state dan lakukan request ke endpoint
+    setLoadingWifiReset(true);
+    try {
+      const res = await fetch("/api/wifi-reset", { method: "POST" });
+      const data = await res.json();
+      
+      if (res.ok && data.success) {
+        toast.success("Perintah reset WiFi berhasil dikirim 📶");
+      } else {
+        throw new Error(data.message || "Gagal");
+      }
+    } catch (error) {
+      toast.error(error.message || "Gagal mengirim perintah reset WiFi");
+    } finally {
+      // Reset loading state setelah selesai
+      setLoadingWifiReset(false);
+    }
   };
 
   // Helper Icon Baterai
@@ -690,6 +740,40 @@ export default function AdminDashboard() {
             {loadingOTA ? (
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : "Update Firmware"}
+          </button>
+        </section>
+
+        {/* CARD F - Pengaturan WiFi */}
+        <section className="bg-white rounded-2xl p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            Pengaturan WiFi 📶
+          </h2>
+          
+          <div className="bg-[#FFF8E1] border border-yellow-200 rounded-xl p-4 mb-5 text-yellow-800 text-sm">
+            <div className="flex gap-2 mb-1">
+              <span>⚠️</span>
+              <p className="font-semibold">Reset WiFi hanya berfungsi saat device masih terhubung internet.</p>
+            </div>
+            <p className="ml-7 opacity-90">Setelah reset, Suci perlu setup WiFi baru lewat hotspot <strong>RoboLove-Setup</strong>.</p>
+          </div>
+
+          <button 
+            disabled={loadingWifiReset || !status.online}
+            onClick={handleResetWifi}
+            className={`w-full py-3 rounded-xl font-medium transition-colors text-sm flex items-center justify-center gap-2 ${
+              (!status.online) 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-red-400 hover:bg-red-500 text-white shadow-sm'
+            }`}
+          >
+            {loadingWifiReset ? (
+              <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            ) : (
+              <>
+                <Wifi size={18} />
+                <span>Reset WiFi Device</span>
+              </>
+            )}
           </button>
         </section>
 
