@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import mqtt from "mqtt";
 import { useRouter } from "next/navigation";
 import { 
   LogOut, 
@@ -84,11 +83,34 @@ export default function AdminDashboard() {
   const [loadingWifiReset, setLoadingWifiReset] = useState(false);
 
   // Real-time Status via MQTT WebSockets
-  useEffect(() => {
-    const client = mqtt.connect(process.env.NEXT_PUBLIC_MQTT_URL, {
-      username: process.env.NEXT_PUBLIC_MQTT_USERNAME,
-      password: process.env.NEXT_PUBLIC_MQTT_PASSWORD,
-    });
+ // Hapus ini semua:
+// useEffect(() => {
+//   const client = mqtt.connect(...)
+//   ...
+// }, []);
+
+// Ganti dengan ini:
+useEffect(() => {
+  const fetchStatus = async () => {
+    try {
+      const res = await fetch("/api/status");
+      if (res.ok) {
+        const data = await res.json();
+        setStatus({
+          online: data.online ?? false,
+          battery: data.baterai ?? 0,
+          firmwareApp: data.firmware ?? "1.0.0"
+        });
+      }
+    } catch (e) {
+      console.error("Gagal fetch status:", e);
+    }
+  };
+
+  fetchStatus(); // Langsung fetch sekali
+  const interval = setInterval(fetchStatus, 5000); // Polling tiap 5 detik
+  return () => clearInterval(interval);
+}, []);
 
     client.on("connect", () => {
       console.log("WebSocket terhubung ke MQTT!");
