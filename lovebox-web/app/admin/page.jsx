@@ -133,15 +133,6 @@ useEffect(() => {
       }
     });
 
-    client.on("close", () => setStatus(prev => ({ ...prev, online: false })));
-    client.on("offline", () => setStatus(prev => ({ ...prev, online: false })));
-
-    // Cleanup saat komponen unmount
-    return () => {
-      if (client) client.end();
-    };
-  }, []);
-
   // Fetch Initial Data (Fotos dll)
   useEffect(() => {
     const fetchData = async () => {
