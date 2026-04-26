@@ -111,28 +111,6 @@ useEffect(() => {
   const interval = setInterval(fetchStatus, 5000); // Polling tiap 5 detik
   return () => clearInterval(interval);
 }, []);
-
-    client.on("connect", () => {
-      console.log("WebSocket terhubung ke MQTT!");
-      client.subscribe("lovebox/status");
-    });
-
-    client.on("message", (topic, message) => {
-      if (topic === "lovebox/status") {
-        try {
-          const data = JSON.parse(message.toString());
-          setStatus(prev => ({
-            ...prev,
-            online: data.online ?? true, 
-            battery: data.battery ?? prev.battery,
-            firmwareApp: data.firmwareApp ?? prev.firmwareApp
-          }));
-        } catch (error) {
-          console.error("Gagal parse MQTT status:", error);
-        }
-      }
-    });
-
   // Fetch Initial Data (Fotos dll)
   useEffect(() => {
     const fetchData = async () => {
