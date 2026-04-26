@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 
 const STATUS_FILE = "/tmp/lovebox_status.json";
