@@ -74,12 +74,12 @@ export async function GET() {
 export async function POST(request) {
   try {
     // Verifikasi device key
-    const deviceKey = request.headers.get("x-device-key");
-    if (deviceKey !== process.env.DEVICE_KEY) {
-      return NextResponse.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      );
+    //const deviceKey = request.headers.get("x-device-key");
+    //if (deviceKey !== process.env.DEVICE_KEY) {
+      //return NextResponse.json(
+        //{ success: false, message: "Unauthorized" },
+        //{ status: 401 }
+      //);
     }
 
     const body = await request.json();
